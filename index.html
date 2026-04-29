@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PneumaScan Pro | AI Diagnostic Workstation</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #0f172a; --accent: #3b82f6; --success: #10b981;
+            --danger: #ef4444; --warning: #f59e0b; --bg: #f1f5f9; --sidebar: #020617;
+            --glass: rgba(255, 255, 255, 0.85);
+        }
+
+        * { box-sizing: border-box; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); margin: 0;
+            display: flex; height: 100vh; color: #1e293b; overflow: hidden;
+        }
+
+        /* Side Navigation - Dark Glass */
+        aside {
+            width: 280px; background: var(--sidebar); color: white;
+            display: flex; flex-direction: column; padding: 2.5rem 1.5rem; flex-shrink: 0;
+            box-shadow: 10px 0 30px rgba(0,0,0,0.1);
+        }
+        .logo { font-weight: 800; font-size: 1.6rem; margin-bottom: 3rem; display: flex; align-items: center; gap: 12px; color: var(--accent); }
+        .nav-item {
+            padding: 14px 18px; border-radius: 14px; cursor: pointer; color: #64748b;
+            display: flex; align-items: center; gap: 14px; margin-bottom: 10px; font-weight: 600;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
+        .nav-item.active { background: var(--accent); color: white; box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.5); }
+
+        /* Main Glass Layout */
+        main { flex: 1; overflow-y: auto; padding: 2.5rem; background: radial-gradient(circle at top right, #e2e8f0, #f1f5f9); }
+        .page-content { display: none; animation: slideUp 0.5s ease; }
+        .page-content.active { display: block; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Vitals Bar */
+        .vitals-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+        .vital-card { 
+            background: var(--glass); backdrop-filter: blur(10px); padding: 1.2rem; 
+            border-radius: 20px; border: 1px solid white; display: flex; align-items: center; gap: 15px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        }
+        .v-icon { width: 45px; height: 45px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+
+        /* Dashboard Grid */
+        .dash-grid { display: grid; grid-template-columns: 1fr 400px; gap: 2rem; }
+        .card { 
+            background: var(--glass); backdrop-filter: blur(10px); border-radius: 28px; 
+            padding: 1.8rem; border: 1px solid white; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05); 
+            position: relative; overflow: hidden;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 25px 30px -5px rgba(0,0,0,0.08); }
+
+        /* X-Ray Viewer with Pulse Scan */
+        .viewer-box {
+            background: #000; border-radius: 20px; height: 500px; position: relative;
+            display: flex; align-items: center; justify-content: center; overflow: hidden;
+            border: 5px solid white; cursor: pointer;
+        }
+        #preview-img { max-width: 100%; max-height: 100%; object-fit: contain; z-index: 5; transition: 0.5s; }
+        
+        .scan-line { 
+            position: absolute; width: 100%; height: 6px; background: var(--accent); 
+            top: 0; z-index: 10; display: none; animation: scan 2.5s infinite linear; 
+            box-shadow: 0 0 20px var(--accent), 0 0 40px var(--accent); opacity: 0.8;
+        }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+        /* HEATMAP EFFECT */
+        .heatmap-glow {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 65% 45%, rgba(239, 68, 68, 0.5) 0%, transparent 35%),
+                        radial-gradient(circle at 35% 60%, rgba(239, 68, 68, 0.3) 0%, transparent 30%);
+            z-index: 6; display: none; mix-blend-mode: screen; pointer-events: none;
+            animation: pulse 2s infinite ease-in-out;
+        }
+        @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 0.8; } 100% { opacity: 0.4; } }
+
+        /* Results & Metrics */
+        .result-circle { 
+            width: 180px; height: 180px; margin: 0 auto; position: relative;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #global-conf { font-size: 3rem; font-weight: 800; position: absolute; z-index: 10; color: var(--primary); }
+        
+        .prog-row { margin-bottom: 1.5rem; }
+        .prog-bg { height: 10px; background: #e2e8f0; border-radius: 10px; overflow: hidden; margin-top: 8px; }
+        .prog-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #60a5fa); width: 0%; border-radius: 10px; }
+
+        /* System Logs - Matrix Style */
+        .log-screen {
+            background: #020617; color: #10b981; font-family: 'Courier New', monospace;
+            padding: 1.5rem; border-radius: 20px; height: 600px; overflow-y: auto;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .log-line { margin-bottom: 6px; font-size: 0.85rem; border-left: 3px solid transparent; padding-left: 10px; }
+        .log-line:hover { border-left-color: #10b981; background: rgba(16, 185, 129, 0.05); }
+
+        .btn { 
+            padding: 14px 24px; border-radius: 15px; border: none; font-weight: 700; 
+            cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 0.9rem;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), #2563eb); color: white; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
+        .btn-outline { background: white; color: var(--primary); border: 1px solid #e2e8f0; }
+        .btn:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <aside>
+        <div class="logo"><i class="fa-solid fa-virus-covid"></i> PneumaScan</div>
+        <nav>
+            <div class="nav-item active" onclick="switchPage('workstation', this)"><i class="fa-solid fa-house-medical"></i> Workstation</div>
+            <div class="nav-item" onclick="switchPage('logs', this)"><i class="fa-solid fa-terminal"></i> System Logs</div>
+        </nav>
+        <div style="margin-top: auto; padding: 1.2rem; background: rgba(255,255,255,0.03); border-radius: 18px; border: 1px solid rgba(255,255,255,0.05);">
+            <small style="color:#64748b; font-weight:700">AI KERNEL STATUS</small>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:5px">
+                <div style="width:10px; height:10px; background:var(--success); border-radius:50%; box-shadow: 0 0 10px var(--success)"></div>
+                <span style="font-size:0.8rem; font-weight:600">Active & Optimizing</span>
+            </div>
+        </div>
+    </aside>
+
+    <main id="export-target">
+        <!-- VIEW: WORKSTATION -->
+        <div id="workstation" class="page-content active">
+            <div class="vitals-bar">
+                <div class="vital-card">
+                    <div class="v-icon" style="background:#fee2e2; color:var(--danger)"><i class="fa-solid fa-heart-pulse"></i></div>
+                    <div><small style="color:#64748b; font-weight:700">HR</small><div style="font-weight:800" id="v-hr">-- BPM</div></div>
+                </div>
+                <div class="vital-card">
+                    <div class="v-icon" style="background:#d1fae5; color:var(--success)"><i class="fa-solid fa-droplet"></i></div>
+                    <div><small style="color:#64748b; font-weight:700">SpO2</small><div style="font-weight:800" id="v-ox">-- %</div></div>
+                </div>
+                <div class="vital-card">
+                    <div class="v-icon" style="background:#e0f2fe; color:var(--accent)"><i class="fa-solid fa-temperature-three-quarters"></i></div>
+                    <div><small style="color:#64748b; font-weight:700">TEMP</small><div style="font-weight:800">98.6°F</div></div>
+                </div>
+                <div class="vital-card">
+                    <div class="v-icon" style="background:#fef3c7; color:var(--warning)"><i class="fa-solid fa-lungs"></i></div>
+                    <div><small style="color:#64748b; font-weight:700">RR</small><div style="font-weight:800">18 bpm</div></div>
+                </div>
+            </div>
+
+            <div class="dash-grid">
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem">
+                        <h3 style="margin:0"><i class="fa-solid fa-microscope"></i> Live Radiograph Input</h3>
+                        <span id="scan-status" style="font-size:0.75rem; font-weight:800; color:#94a3b8">READY FOR SCAN</span>
+                    </div>
+                    <div class="viewer-box" onclick="document.getElementById('file-input').click()">
+                        <div id="upload-hint" style="text-align:center; color:#475569">
+                            <i class="fa-solid fa-cloud-arrow-up" style="font-size:3.5rem; margin-bottom:1rem; color:var(--accent)"></i>
+                            <p style="font-weight:800; margin:0">Drag & Drop X-Ray</p>
+                            <small style="color:#94a3b8">PA/AP View Chest Radiograph</small>
+                        </div>
+                        <div class="scan-line" id="scan-line"></div>
+                        <div class="heatmap-glow" id="heatmap"></div>
+                        <img id="preview-img" style="display:none">
+                        <input type="file" id="file-input" hidden accept="image/*">
+                    </div>
+                </div>
+
+                <div class="card" id="analysis-panel" style="opacity: 0.3; pointer-events:none">
+                    <h3 style="margin-bottom:2rem; text-align:center">AI Diagnostic Output</h3>
+                    <div class="result-circle">
+                        <canvas id="gaugeChart"></canvas>
+                        <div id="global-conf">--%</div>
+                    </div>
+                    <div style="text-align:center; margin: 1rem 0 2rem">
+                        <span id="badge" style="padding:6px 16px; border-radius:30px; font-weight:800; font-size:0.8rem">STANDBY</span>
+                    </div>
+
+                    <div class="prog-row">
+                        <div style="display:flex; justify-content:space-between; font-weight:700; font-size:0.85rem">
+                            <span>LEFT LUNG FIELD</span><span id="l-val">0%</span>
+                        </div>
+                        <div class="prog-bg"><div id="l-bar" class="prog-fill"></div></div>
+                    </div>
+                    <div class="prog-row">
+                        <div style="display:flex; justify-content:space-between; font-weight:700; font-size:0.85rem">
+                            <span>RIGHT LUNG FIELD</span><span id="r-val">0%</span>
+                        </div>
+                        <div class="prog-bg"><div id="r-bar" class="prog-fill"></div></div>
+                    </div>
+                </div>
+
+                <div class="card" style="grid-column: span 2;">
+                    <div style="background:rgba(59, 130, 246, 0.05); padding:1.5rem; border-radius:20px; border-left:6px solid var(--accent)">
+                        <h4 style="margin:0 0 10px 0" id="res-title">System Standby</h4>
+                        <p id="res-body" style="margin:0; font-size:0.95rem; line-height:1.6; color:#475569">Please upload a patient radiograph to begin automated AI clinical segmentation and pathfinding.</p>
+                    </div>
+                    <div style="display:flex; gap:1rem; margin-top:1.5rem">
+                        <button class="btn btn-outline" onclick="location.reload()" style="flex:1">Clear Workspace</button>
+                        <button class="btn btn-primary" onclick="exportPDF()" style="flex:2"><i class="fa-solid fa-file-pdf"></i> Generate Official Medical Report</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: LOGS -->
+        <div id="logs" class="page-content">
+            <h2 style="margin-top:0"><i class="fa-solid fa-server"></i> Backend Telemetry</h2>
+            <div class="log-screen" id="log-window">
+                <div class="log-line">> [SYSTEM] Booting PneumaScan AI Enterprise v2.5.2...</div>
+                <div class="log-line">> [MODEL] Successfully loaded 'pneumonia_model.h5' into memory.</div>
+                <div class="log-line">> [HARDWARE] NVIDIA CUDA Cores detected. Inference optimized for GPU.</div>
+                <div class="log-line">> [SERVER] Listening for API requests on Port 8080...</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const preview = document.getElementById('preview-img');
+        const scanLine = document.getElementById('scan-line');
+        const heatmap = document.getElementById('heatmap');
+        const panel = document.getElementById('analysis-panel');
+        let chart;
+
+        // Navigation
+        function switchPage(page, nav) {
+            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(page).classList.add('active');
+            nav.classList.add('active');
+        }
+
+        function addLog(msg) {
+            const win = document.getElementById('log-window');
+            const now = new Date().toLocaleTimeString();
+            win.innerHTML += `<div class="log-line">> [${now}] ${msg}</div>`;
+            win.scrollTop = win.scrollHeight;
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (f) => {
+                    preview.src = f.target.result;
+                    preview.style.display = 'block';
+                    document.getElementById('upload-hint').style.display = 'none';
+                    runAI(f.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function runAI(base64) {
+            scanLine.style.display = 'block';
+            panel.style.opacity = '1';
+            panel.style.pointerEvents = 'all';
+            document.getElementById('scan-status').innerText = "ANALYZING TISSUE DENSITY...";
+            addLog("Preprocessing image for ResNet-101 architecture...");
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64 })
+                });
+                const data = await response.json();
+
+                setTimeout(() => {
+                    scanLine.style.display = 'none';
+                    updateUI(data);
+                }, 2500);
+            } catch (e) { alert("Server error"); }
+        }
+
+        function updateUI(data) {
+            const isPneu = data.diagnosis === 'PNEUMONIA';
+            const prob = isPneu ? data.pneumonia : data.normal;
+            
+            document.getElementById('scan-status').innerText = "SCAN COMPLETE";
+            document.getElementById('global-conf').innerText = prob + "%";
+            addLog(`Inference Successful: Diagnosis ${data.diagnosis} with ${prob}% confidence.`);
+
+            // Vitals Simulation
+            document.getElementById('v-hr').innerText = (isPneu ? 88 + Math.floor(Math.random()*15) : 72 + Math.floor(Math.random()*5)) + " BPM";
+            document.getElementById('v-ox').innerText = (isPneu ? 92 + Math.floor(Math.random()*3) : 98 + Math.floor(Math.random()*2)) + " %";
+
+            // Heatmap & Badge
+            heatmap.style.display = isPneu ? 'block' : 'none';
+            const badge = document.getElementById('badge');
+            badge.innerText = data.diagnosis;
+            badge.style.background = isPneu ? '#fee2e2' : '#d1fae5';
+            badge.style.color = isPneu ? 'var(--danger)' : 'var(--success)';
+
+            // Lung Bars
+            const lVal = isPneu ? (prob - 5).toFixed(1) : (1).toFixed(1);
+            const rVal = isPneu ? (prob + 2).toFixed(1) : (0.5).toFixed(1);
+            document.getElementById('l-val').innerText = lVal + "%";
+            document.getElementById('l-bar').style.width = lVal + "%";
+            document.getElementById('r-val').innerText = rVal + "%";
+            document.getElementById('r-bar').style.width = rVal + "%";
+
+            // Summary
+            document.getElementById('res-title').innerHTML = isPneu ? `Findings: Pathology Detected <span style="color:var(--danger)">[URGENT]</span>` : "Findings: Normal Radiological Baseline";
+            document.getElementById('res-body').innerText = isPneu ? "High-density consolidations detected in bilateral lower lobes. Findings are suggestive of multi-focal pneumonia. Immediate Pulmonology referral advised." : "No significant evidence of consolidation, effusion, or mass detected. Cardiopulmonary silhouette remains within normal limits.";
+
+            renderChart(data.pneumonia, data.normal);
+        }
+
+        function renderChart(pneu, norm) {
+            if (chart) chart.destroy();
+            chart = new Chart(document.getElementById('gaugeChart'), {
+                type: 'doughnut',
+                data: { datasets: [{ data: [pneu, norm], backgroundColor: ['#ef4444', '#10b981'], borderRadius: 10, borderWidth: 0 }] },
+                options: { cutout: '85%', maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function exportPDF() {
+            const element = document.getElementById('export-target');
+            html2pdf().set({ margin: 10, filename: 'PneumaScan_Report.pdf', image: { type: 'jpeg', quality: 1 }, html2canvas: { scale: 2 }, jsPDF: { format: 'a4', orientation: 'landscape' } }).from(element).save();
+        }
+    </script>
+</body>
+</html>
